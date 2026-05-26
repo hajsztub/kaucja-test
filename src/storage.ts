@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Counts, INITIAL_COUNTS, ReturnEntry } from "./deposit";
+import { Counts, DEFAULT_GOALS, Goal, INITIAL_COUNTS, ReturnEntry } from "./deposit";
 
 const COUNTS_KEY = "kaucja:counts";
 const HISTORY_KEY = "kaucja:history";
 const ONBOARDING_KEY = "kaucja:onboarding-complete";
+const GOALS_KEY = "kaucja:goals";
 
 export const loadCounts = async (): Promise<Counts> => {
   const raw = await AsyncStorage.getItem(COUNTS_KEY);
@@ -20,6 +21,14 @@ export const loadHistory = async (): Promise<ReturnEntry[]> => {
 
 export const saveHistory = (history: ReturnEntry[]) =>
   AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+
+export const loadGoals = async (): Promise<Goal[]> => {
+  const raw = await AsyncStorage.getItem(GOALS_KEY);
+  return raw ? JSON.parse(raw) : DEFAULT_GOALS;
+};
+
+export const saveGoals = (goals: Goal[]) =>
+  AsyncStorage.setItem(GOALS_KEY, JSON.stringify(goals));
 
 export const isOnboardingComplete = async () =>
   (await AsyncStorage.getItem(ONBOARDING_KEY)) === "true";

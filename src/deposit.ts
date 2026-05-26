@@ -20,6 +20,14 @@ export type ReturnEntry = {
   placeName?: string;
 };
 
+export type Goal = {
+  id: string;
+  name: string;
+  current: number;
+  target: number;
+  emoji: string;
+};
+
 export const PACKAGES: DepositPackage[] = [
   {
     id: "pet",
@@ -55,6 +63,13 @@ export const INITIAL_COUNTS: Counts = {
   can: 0,
   glass: 0
 };
+
+export const DEFAULT_GOALS: Goal[] = [
+  { id: "bike", name: "Oszczędzam na rower", current: 68.5, target: 100, emoji: "🚲" },
+  { id: "school", name: "Zbiórka szkolna", current: 132, target: 250, emoji: "🎒" },
+  { id: "week", name: "Wyzwanie tygodnia", current: 18.5, target: 25, emoji: "🏆" },
+  { id: "class", name: "Na zieloną klasę", current: 210, target: 500, emoji: "🌿" }
+];
 
 export const calculateAmount = (counts: Counts) =>
   PACKAGES.reduce((sum, item) => sum + counts[item.id] * item.deposit, 0);

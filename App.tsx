@@ -28,7 +28,9 @@ import {
   calculateAmount,
   countAll,
   Counts,
+  DEFAULT_GOALS,
   formatMoney,
+  Goal,
   INITIAL_COUNTS,
   PACKAGES,
   PackageKind,
@@ -39,8 +41,10 @@ import {
   completeOnboarding,
   isOnboardingComplete,
   loadCounts,
+  loadGoals,
   loadHistory,
   saveCounts,
+  saveGoals,
   saveHistory
 } from "./src/storage";
 
@@ -144,16 +148,10 @@ const guideSteps = [
   }
 ];
 
-const goals = [
-  { name: "Oszczędzam na rower", current: 68.5, target: 100, icon: "bicycle-outline" as const },
-  { name: "Zbiórka szkolna", current: 132, target: 250, icon: "school-outline" as const },
-  { name: "Wyzwanie tygodnia", current: 18.5, target: 25, icon: "trophy-outline" as const },
-  { name: "Na zieloną klasę", current: 210, target: 500, icon: "leaf-outline" as const }
-];
-
 export default function App() {
   const [counts, setCounts] = useState<Counts>(INITIAL_COUNTS);
   const [history, setHistory] = useState<ReturnEntry[]>([]);
+  const [goals, setGoals] = useState<Goal[]>(DEFAULT_GOALS);
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingIndex, setOnboardingIndex] = useState(0);
@@ -206,6 +204,7 @@ export default function App() {
   const hydrate = async () => {
     setCounts(await loadCounts());
     setHistory(await loadHistory());
+    setGoals(await loadGoals());
     setShowOnboarding(!(await isOnboardingComplete()));
   };
 
@@ -253,6 +252,11 @@ export default function App() {
   const finishOnboarding = async () => {
     await completeOnboarding();
     setShowOnboarding(false);
+  };
+
+  const updateGoals = (nextGoals: Goal[]) => {
+    setGoals(nextGoals);
+    void saveGoals(nextGoals);
   };
 
   const navigate = (tab: Tab) => {
@@ -305,7 +309,7 @@ export default function App() {
             )}
             {activeTab === "map" && <MapScreen region={region} />}
             {activeTab === "history" && <HistoryScreen history={history} totalSaved={totalSaved} />}
-            {activeTab === "goals" && <GoalsScreen />}
+            {activeTab === "goals" && <GoalsScreen goals={goals} onChangeGoals={updateGoals} />}
             {activeTab === "guide" && <GuideScreen onReplayTutorial={() => setShowOnboarding(true)} />}
           </View>
           <BannerAd unitId={BANNER_AD_UNIT_ID} size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} />
@@ -385,10 +389,10 @@ function HomeScreen({
       </LinearGradient>
 
       <View style={styles.quickGrid}>
-        <QuickTile icon="calculator-outline" label="Kalkulator" onPress={() => onNavigate("calc")} />
-        <QuickTile icon="location-outline" label="Mapa" onPress={() => onNavigate("map")} />
-        <QuickTile icon="book-outline" label="Jak oddać" onPress={() => onNavigate("guide")} />
-        <QuickTile icon="time-outline" label="Historia" onPress={() => onNavigate("history")} />
+        <QuickTile icon="calculator-outline" emoji="🧮" label="Kalkulator" onPress={() => onNavigate("calc")} />
+        <QuickTile icon="location-outline" emoji="📍" label="Mapa" onPress={() => onNavigate("map")} />
+        <QuickTile icon="book-outline" emoji="♻️" label="Jak oddać" onPress={() => onNavigate("guide")} />
+        <QuickTile icon="time-outline" emoji="💰" label="Historia" onPress={() => onNavigate("history")} />
       </View>
 
       <View style={styles.rateCard}>
@@ -428,16 +432,21 @@ function HomeScreen({
 
 function QuickTile({
   icon,
+  emoji,
   label,
   onPress
 }: {
   icon: keyof typeof Ionicons.glyphMap;
+  emoji: string;
   label: string;
   onPress: () => void;
 }) {
   return (
     <Pressable style={styles.quickTile} onPress={onPress}>
-      <Ionicons name={icon} size={31} color={GREEN} />
+      <View style={styles.quickVisual}>
+        <Text style={styles.quickEmoji}>{emoji}</Text>
+        <Ionicons name={icon} size={24} color={GREEN} style={styles.quickIconOverlay} />
+      </View>
       <Text style={styles.quickLabel}>{label}</Text>
     </Pressable>
   );
@@ -512,7 +521,7 @@ function CalculatorScreen({
         </Pressable>
       </View>
 
-      <AdPreview title="Ekologiczne rozwiązania dla Twojego domu" />
+      <AdPreview emoji="🪴" title="Ekologiczne rozwiązania dla Twojego domu" />
       <Text style={styles.microCopy}>{totalCount} opakowań w aktualnym zwrocie</Text>
     </ScrollView>
   );
@@ -630,29 +639,159 @@ function HistoryScreen({ history, totalSaved }: { history: ReturnEntry[]; totalS
             <Text style={styles.historyAmount}>+{formatMoney(item.amount)}</Text>
           </View>
         )}
-        ListFooterComponent={<AdPreview title="Zadbaj o planetę każdego dnia" />}
+        ListFooterComponent={<AdPreview emoji="🌍" title="Zadbaj o planetę każdego dnia" />}
       />
     </View>
   );
 }
 
-function GoalsScreen() {
+function GoalsScreen({
+  goals,
+  onChangeGoals
+}: {
+  goals: Goal[];
+  onChangeGoals: (goals: Goal[]) => void;
+}) {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [name, setName] = useState("");
+  const [target, setTarget] = useState("");
+  const [emoji, setEmoji] = useState("🎯");
+
+  const resetForm = () => {
+    setName("");
+    setTarget("");
+    setEmoji("🎯");
+  };
+
+  const addGoal = () => {
+    const parsedTarget = Number(target.replace(",", "."));
+
+    if (!name.trim() || !Number.isFinite(parsedTarget) || parsedTarget <= 0) {
+      Alert.alert("Uzupełnij cel", "Podaj nazwę celu i kwotę większą od zera.");
+      return;
+    }
+
+    onChangeGoals([
+      {
+        id: `${Date.now()}`,
+        name: name.trim(),
+        current: 0,
+        target: parsedTarget,
+        emoji: emoji.trim() || "🎯"
+      },
+      ...goals
+    ]);
+    resetForm();
+    setModalVisible(false);
+  };
+
+  const removeGoal = (goal: Goal) => {
+    Alert.alert("Usunąć cel?", `Cel „${goal.name}” zniknie z listy.`, [
+      { text: "Anuluj", style: "cancel" },
+      {
+        text: "Usuń",
+        style: "destructive",
+        onPress: () => onChangeGoals(goals.filter((item) => item.id !== goal.id))
+      }
+    ]);
+  };
+
   return (
-    <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.goalHeader}>
-        <View>
-          <Text style={styles.sectionTitle}>Zbiórki i cele</Text>
-          <Text style={styles.helperText}>Moje cele</Text>
+    <>
+      <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
+        <LinearGradient colors={["#F3FFF2", "#E5F6FF"]} style={styles.goalHero}>
+          <View>
+            <Text style={styles.goalHeroEmoji}>💚</Text>
+            <Text style={styles.goalHeroTitle}>Zbieraj kaucję na coś fajnego</Text>
+            <Text style={styles.goalHeroText}>Każdy zwrot może zasilić rower, klasę, wyjazd albo małą nagrodę.</Text>
+          </View>
+          <Pressable style={styles.addGoalButtonLarge} onPress={() => setModalVisible(true)}>
+            <Ionicons name="add-outline" size={22} color="#FFFFFF" />
+            <Text style={styles.addGoalText}>Nowy cel</Text>
+          </Pressable>
+        </LinearGradient>
+
+        <View style={styles.goalHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Zbiórki i cele</Text>
+            <Text style={styles.helperText}>{goals.length} aktywne cele</Text>
+          </View>
+          <Pressable style={styles.addGoalButton} onPress={() => setModalVisible(true)}>
+            <Ionicons name="add-outline" size={22} color="#FFFFFF" />
+          </Pressable>
         </View>
-        <Pressable style={styles.addGoalButton}>
-          <Ionicons name="add-outline" size={22} color="#FFFFFF" />
-        </Pressable>
-      </View>
-      {goals.map((goal, index) => (
-        <GoalCard key={goal.name} goal={goal} highlighted={index === 0} />
-      ))}
-      <AdPreview title="Energia ze słońca dla Twojego domu" />
-    </ScrollView>
+        {goals.length === 0 ? (
+          <View style={styles.emptyGoals}>
+            <Text style={styles.emptyGoalsEmoji}>🎯</Text>
+            <Text style={styles.emptyTitle}>Dodaj pierwszy cel</Text>
+            <Text style={styles.emptyBody}>Nazwij zbiórkę i ustaw kwotę, którą chcesz uzbierać z kaucji.</Text>
+          </View>
+        ) : (
+          goals.map((goal, index) => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              highlighted={index === 0}
+              onDelete={() => removeGoal(goal)}
+            />
+          ))
+        )}
+        <AdPreview emoji="☀️" title="Energia ze słońca dla Twojego domu" />
+      </ScrollView>
+
+      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.goalModal}>
+            <Text style={styles.goalModalEmoji}>{emoji}</Text>
+            <Text style={styles.onboardingTitle}>Nowy cel</Text>
+            <Text style={styles.onboardingText}>Dodaj cel, który użytkownik może zasilać zwrotami kaucji.</Text>
+
+            <View style={styles.emojiRow}>
+              {["🎯", "🚲", "🎒", "🏆", "🌿", "🏖️", "🎁", "☕"].map((item) => (
+                <Pressable
+                  key={item}
+                  style={[styles.emojiChoice, emoji === item && styles.emojiChoiceActive]}
+                  onPress={() => setEmoji(item)}
+                >
+                  <Text style={styles.emojiChoiceText}>{item}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Nazwa celu"
+              placeholderTextColor="#8A989F"
+              style={styles.goalInput}
+            />
+            <TextInput
+              value={target}
+              onChangeText={setTarget}
+              placeholder="Kwota celu, np. 100"
+              placeholderTextColor="#8A989F"
+              keyboardType="decimal-pad"
+              style={styles.goalInput}
+            />
+
+            <View style={styles.onboardingActions}>
+              <Pressable
+                style={styles.skipButton}
+                onPress={() => {
+                  resetForm();
+                  setModalVisible(false);
+                }}
+              >
+                <Text style={styles.skipText}>Anuluj</Text>
+              </Pressable>
+              <Pressable style={styles.primaryButton} onPress={addGoal}>
+                <Text style={styles.primaryText}>Dodaj cel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </>
   );
 }
 
@@ -689,10 +828,12 @@ function GuideScreen({ onReplayTutorial }: { onReplayTutorial: () => void }) {
 
 function GoalCard({
   goal,
-  highlighted
+  highlighted,
+  onDelete
 }: {
-  goal: { name: string; current: number; target: number; icon: keyof typeof Ionicons.glyphMap };
+  goal: Goal;
   highlighted?: boolean;
+  onDelete: () => void;
 }) {
   const progress = Math.min(1, goal.current / goal.target);
 
@@ -703,8 +844,13 @@ function GoalCard({
           <Text style={styles.goalName}>{goal.name}</Text>
           <Text style={styles.goalAmount}>{formatMoney(goal.current)}</Text>
         </View>
-        <View style={styles.goalIcon}>
-          <Ionicons name={goal.icon} size={42} color={GREEN} />
+        <View style={styles.goalRight}>
+          <Pressable style={styles.deleteGoalButton} onPress={onDelete}>
+            <Ionicons name="trash-outline" size={18} color="#C24B4B" />
+          </Pressable>
+          <View style={styles.goalIcon}>
+            <Text style={styles.goalEmoji}>{goal.emoji}</Text>
+          </View>
         </View>
       </View>
       <View style={styles.progressTrack}>
@@ -807,9 +953,10 @@ function CheckLine({ text }: { text: string }) {
   );
 }
 
-function AdPreview({ title }: { title: string }) {
+function AdPreview({ emoji, title }: { emoji: string; title: string }) {
   return (
     <View style={styles.adPreview}>
+      <Text style={styles.adEmoji}>{emoji}</Text>
       <View>
         <Text style={styles.adLabel}>Reklama</Text>
         <Text style={styles.adTitle}>{title}</Text>
@@ -940,6 +1087,22 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2
+  },
+  quickVisual: {
+    width: 42,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  quickEmoji: {
+    fontSize: 28
+  },
+  quickIconOverlay: {
+    position: "absolute",
+    right: -7,
+    bottom: -4,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8
   },
   quickLabel: {
     color: NAVY,
@@ -1190,7 +1353,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 10
+  },
+  adEmoji: {
+    fontSize: 30
   },
   adLabel: {
     color: MUTED,
@@ -1413,6 +1580,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between"
   },
+  goalHero: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D1E8D9",
+    padding: 16,
+    gap: 14
+  },
+  goalHeroEmoji: {
+    fontSize: 34,
+    marginBottom: 4
+  },
+  goalHeroTitle: {
+    color: NAVY,
+    fontSize: 22,
+    fontWeight: "900"
+  },
+  goalHeroText: {
+    color: MUTED,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 5
+  },
   addGoalButton: {
     width: 38,
     height: 38,
@@ -1420,6 +1609,33 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
     alignItems: "center",
     justifyContent: "center"
+  },
+  addGoalButtonLarge: {
+    minHeight: 46,
+    borderRadius: 8,
+    backgroundColor: GREEN,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14
+  },
+  addGoalText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+    fontSize: 15
+  },
+  emptyGoals: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: LINE,
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    alignItems: "center"
+  },
+  emptyGoalsEmoji: {
+    fontSize: 42,
+    marginBottom: 8
   },
   goalCard: {
     backgroundColor: "#FFFFFF",
@@ -1437,6 +1653,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center"
   },
+  goalRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  deleteGoalButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#FFF0F0",
+    alignItems: "center",
+    justifyContent: "center"
+  },
   goalName: {
     color: NAVY,
     fontSize: 15,
@@ -1453,6 +1682,9 @@ const styles = StyleSheet.create({
     height: 58,
     alignItems: "center",
     justifyContent: "center"
+  },
+  goalEmoji: {
+    fontSize: 42
   },
   progressTrack: {
     height: 8,
@@ -1473,6 +1705,51 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 12,
     fontWeight: "700"
+  },
+  goalModal: {
+    flex: 1,
+    padding: 20,
+    justifyContent: "center",
+    gap: 14
+  },
+  goalModalEmoji: {
+    fontSize: 62,
+    textAlign: "center"
+  },
+  emojiRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "center",
+    marginVertical: 8
+  },
+  emojiChoice: {
+    width: 46,
+    height: 46,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: LINE,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  emojiChoiceActive: {
+    borderColor: GREEN,
+    backgroundColor: "#EAF8EB"
+  },
+  emojiChoiceText: {
+    fontSize: 24
+  },
+  goalInput: {
+    minHeight: 52,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: LINE,
+    color: NAVY,
+    fontSize: 16,
+    fontWeight: "700",
+    paddingHorizontal: 14
   },
   guideCard: {
     backgroundColor: "#FFFFFF",
