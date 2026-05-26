@@ -11,7 +11,9 @@
       "resizeMode": "cover",
       "backgroundColor": "#F7FAF8"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apphill.kaucja",
@@ -24,6 +26,7 @@
     },
     "android": {
       "package": "com.apphill.kaucja",
+      "versionCode": 2,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
@@ -34,7 +37,10 @@
           "apiKey": "AIzaSyBz493q0ZZUWt5tQAimcgupJDk5kfwOe44"
         }
       },
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "plugins": [
       "@react-native-firebase/app",
@@ -43,6 +49,16 @@
         {
           "androidAppId": "ca-app-pub-1906928325769847~7025316180",
           "iosAppId": "ca-app-pub-1906928325769847~7025316180"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
+          }
         }
       ]
     ],
