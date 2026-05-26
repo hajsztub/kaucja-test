@@ -103,6 +103,24 @@ const defaultRegion: Region = {
   longitudeDelta: 0.07
 };
 
+const distanceInKm = (
+  first: { latitude: number; longitude: number },
+  second: { latitude: number; longitude: number }
+) => {
+  const earthRadiusKm = 6371;
+  const latDelta = ((second.latitude - first.latitude) * Math.PI) / 180;
+  const lonDelta = ((second.longitude - first.longitude) * Math.PI) / 180;
+  const lat1 = (first.latitude * Math.PI) / 180;
+  const lat2 = (second.latitude * Math.PI) / 180;
+  const a =
+    Math.sin(latDelta / 2) * Math.sin(latDelta / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(lonDelta / 2) * Math.sin(lonDelta / 2);
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const formatDistance = (distance: number) =>
+  distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1).replace(".", ",")} km`;
+
 const guideSteps = [
   {
     title: "Szukaj oznaczenia kaucji",
@@ -501,6 +519,17 @@ function CalculatorScreen({
 }
 
 function MapScreen({ region }: { region: Region }) {
+  const nearestPoints = useMemo(
+    () =>
+      RETURN_POINTS.map((point) => ({
+        ...point,
+        distance: distanceInKm(region, point)
+      }))
+        .sort((first, second) => first.distance - second.distance)
+        .slice(0, 8),
+    [region]
+  );
+
   return (
     <View style={styles.mapScreen}>
       <View style={styles.searchWrap}>
@@ -526,19 +555,20 @@ function MapScreen({ region }: { region: Region }) {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Najbliższe punkty</Text>
           <View style={styles.statusPill}>
-            <Text style={styles.statusPillText}>Otwarte teraz</Text>
+            <Text style={styles.statusPillText}>{RETURN_POINTS.length} punktów</Text>
             <Ionicons name="chevron-down-outline" size={12} color={GREEN} />
           </View>
         </View>
-        {RETURN_POINTS.map((point, index) => (
+        {nearestPoints.map((point) => (
           <View key={point.id} style={styles.pointRow}>
-            <Text style={styles.distance}>{index === 0 ? "1,2 km" : index === 1 ? "1,5 km" : "2,1 km"}</Text>
+            <Text style={styles.distance}>{formatDistance(point.distance)}</Text>
             <View style={styles.pointText}>
-              <Text style={styles.pointName}>Punkt zwrotu</Text>
+              <Text style={styles.pointName}>{point.chain ?? point.name}</Text>
               <Text style={styles.pointAddress}>{point.address}</Text>
+              {point.description && <Text style={styles.pointDescription}>{point.description}</Text>}
             </View>
             <View style={styles.hoursBox}>
-              <Text style={styles.openText}>Otwarte</Text>
+              <Text style={styles.openText}>{point.type === "automat" ? "Butelkomat" : "Punkt"}</Text>
               <Text style={styles.hoursText}>{point.hours ?? "8:00-22:00"}</Text>
             </View>
             <Ionicons name="chevron-forward-outline" size={17} color={MUTED} />
@@ -1252,6 +1282,11 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 12,
     marginTop: 1
+  },
+  pointDescription: {
+    color: "#8A989F",
+    fontSize: 11,
+    marginTop: 2
   },
   hoursBox: {
     alignItems: "flex-start"

@@ -3,12 +3,16 @@ import returnPoints from "./return-points.json";
 export type ReturnPoint = {
   id: string;
   name: string;
+  chain?: string;
   address: string;
+  city?: string;
+  description?: string;
   type: "automat" | "sklep" | "punkt";
   status: "active" | "manual" | "unknown";
   latitude: number;
   longitude: number;
   hours?: string;
+  source?: string;
 };
 
 export const RETURN_POINTS = returnPoints as ReturnPoint[];
