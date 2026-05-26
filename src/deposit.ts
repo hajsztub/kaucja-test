@@ -59,7 +59,7 @@ export const PACKAGES: DepositPackage[] = [
     deposit: 1,
     limit: "do 1,5 l",
     color: "#B65F28",
-    emoji: "🍾"
+    emoji: "🟢"
   }
 ];
 
@@ -70,10 +70,9 @@ export const INITIAL_COUNTS: Counts = {
 };
 
 export const DEFAULT_GOALS: Goal[] = [
-  { id: "bike", name: "Oszczędzam na rower", current: 68.5, target: 100, emoji: "🚲", primary: true },
-  { id: "school", name: "Zbiórka szkolna", current: 132, target: 250, emoji: "🎒" },
-  { id: "week", name: "Wyzwanie tygodnia", current: 18.5, target: 25, emoji: "🏆" },
-  { id: "class", name: "Na zieloną klasę", current: 210, target: 500, emoji: "🌿" }
+  { id: "bike", name: "Na rower", current: 68.5, target: 100, emoji: "🚲", primary: true },
+  { id: "vacation", name: "Na wakacje", current: 132, target: 250, emoji: "🏖️" },
+  { id: "week", name: "Wyzwanie tygodnia", current: 18.5, target: 25, emoji: "🏆" }
 ];
 
 export const calculateAmount = (counts: Counts) =>

@@ -5,6 +5,16 @@ const COUNTS_KEY = "kaucja:counts";
 const HISTORY_KEY = "kaucja:history";
 const ONBOARDING_KEY = "kaucja:onboarding-complete";
 const GOALS_KEY = "kaucja:goals";
+const FAILURE_REPORTS_KEY = "kaucja:failure-reports";
+
+export type FailureReport = {
+  id: string;
+  createdAt: string;
+  location: string;
+  reportDate: string;
+  reportTime: string;
+  reason: string;
+};
 
 export const loadCounts = async (): Promise<Counts> => {
   const raw = await AsyncStorage.getItem(COUNTS_KEY);
@@ -25,9 +35,18 @@ export const saveHistory = (history: ReturnEntry[]) =>
 export const loadGoals = async (): Promise<Goal[]> => {
   const raw = await AsyncStorage.getItem(GOALS_KEY);
   const goals: Goal[] = raw ? JSON.parse(raw) : DEFAULT_GOALS;
-  return goals.some((goal) => goal.primary)
-    ? goals
-    : goals.map((goal, index) => ({ ...goal, primary: index === 0 }));
+  const normalizedGoals = goals
+    .filter((goal) => goal.id !== "class")
+    .map((goal) => {
+      if (goal.id === "bike") return { ...goal, name: "Na rower", emoji: "🚲" };
+      if (goal.id === "school") return { ...goal, id: "vacation", name: "Na wakacje", emoji: "🏖️" };
+      if (goal.id === "week") return { ...goal, name: "Wyzwanie tygodnia", emoji: "🏆" };
+      return goal;
+    });
+
+  return normalizedGoals.some((goal) => goal.primary)
+    ? normalizedGoals
+    : normalizedGoals.map((goal, index) => ({ ...goal, primary: index === 0 }));
 };
 
 export const saveGoals = (goals: Goal[]) =>
@@ -38,3 +57,9 @@ export const isOnboardingComplete = async () =>
 
 export const completeOnboarding = () =>
   AsyncStorage.setItem(ONBOARDING_KEY, "true");
+
+export const saveFailureReport = async (report: FailureReport) => {
+  const raw = await AsyncStorage.getItem(FAILURE_REPORTS_KEY);
+  const reports: FailureReport[] = raw ? JSON.parse(raw) : [];
+  await AsyncStorage.setItem(FAILURE_REPORTS_KEY, JSON.stringify([report, ...reports]));
+};

@@ -41,10 +41,12 @@ import {
 import { RETURN_POINTS } from "./src/points";
 import {
   completeOnboarding,
+  FailureReport,
   isOnboardingComplete,
   loadCounts,
   loadGoals,
   loadHistory,
+  saveFailureReport,
   saveCounts,
   saveGoals,
   saveHistory
@@ -68,12 +70,12 @@ const adRequestOptions = {
 const interstitial = InterstitialAd.createForAdRequest(INTERSTITIAL_AD_UNIT_ID, adRequestOptions);
 const appIcon = require("./assets/icon.png");
 
-const tabs: Array<{ id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { id: "home", label: "Start", icon: "home-outline" },
-  { id: "calc", label: "Kalkulator", icon: "calculator-outline" },
-  { id: "map", label: "Mapa", icon: "location-outline" },
-  { id: "history", label: "Historia", icon: "time-outline" },
-  { id: "goals", label: "Cele", icon: "flame-outline" }
+const tabs: Array<{ id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap; emoji: string }> = [
+  { id: "home", label: "Start", icon: "home-outline", emoji: "🏠" },
+  { id: "calc", label: "Kalkulator", icon: "calculator-outline", emoji: "🧮" },
+  { id: "map", label: "Mapa", icon: "location-outline", emoji: "📍" },
+  { id: "history", label: "Historia", icon: "time-outline", emoji: "💰" },
+  { id: "goals", label: "Cele", icon: "flame-outline", emoji: "🎯" }
 ];
 
 const screenTitles: Record<Tab, string> = {
@@ -88,19 +90,82 @@ const screenTitles: Record<Tab, string> = {
 const onboarding = [
   {
     icon: "scan-outline" as const,
+    emoji: "🔎",
     title: "Oddawaj tylko oznaczone opakowania",
     body: "Szukaj znaku kaucji na etykiecie. Aplikacja pomoże policzyć zwrot przed wizytą w punkcie."
   },
   {
     icon: "calculator-outline" as const,
+    emoji: "🧮",
     title: "Policz kwotę w kilka sekund",
     body: "Ustaw liczbę butelek i puszek suwakiem albo przyciskami, a Kaucjomat pokaże sumę."
   },
   {
     icon: "leaf-outline" as const,
+    emoji: "🌿",
     title: "Zapisuj postęp lokalnie",
     body: "Historia i cele zostają na telefonie. Bez konta, bez logowania, bez wysyłania danych."
   }
+];
+
+const normalizeText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const citySearchCenters = [
+  { name: "warszawa", latitude: 52.2297, longitude: 21.0122, radiusKm: 34 },
+  { name: "krakow", latitude: 50.0647, longitude: 19.945, radiusKm: 28 },
+  { name: "lodz", latitude: 51.7592, longitude: 19.456, radiusKm: 28 },
+  { name: "wroclaw", latitude: 51.1079, longitude: 17.0385, radiusKm: 28 },
+  { name: "poznan", latitude: 52.4064, longitude: 16.9252, radiusKm: 28 },
+  { name: "gdansk", latitude: 54.352, longitude: 18.6466, radiusKm: 30 },
+  { name: "szczecin", latitude: 53.4285, longitude: 14.5528, radiusKm: 28 },
+  { name: "bydgoszcz", latitude: 53.1235, longitude: 18.0084, radiusKm: 24 },
+  { name: "lublin", latitude: 51.2465, longitude: 22.5684, radiusKm: 24 },
+  { name: "bialystok", latitude: 53.1325, longitude: 23.1688, radiusKm: 24 },
+  { name: "katowice", latitude: 50.2649, longitude: 19.0238, radiusKm: 34 },
+  { name: "gdynia", latitude: 54.5189, longitude: 18.5305, radiusKm: 22 },
+  { name: "czestochowa", latitude: 50.8118, longitude: 19.1203, radiusKm: 22 },
+  { name: "radom", latitude: 51.4027, longitude: 21.1471, radiusKm: 22 },
+  { name: "torun", latitude: 53.0138, longitude: 18.5984, radiusKm: 22 },
+  { name: "sosnowiec", latitude: 50.2863, longitude: 19.1041, radiusKm: 22 },
+  { name: "rzeszow", latitude: 50.0413, longitude: 21.999, radiusKm: 22 },
+  { name: "kielce", latitude: 50.8661, longitude: 20.6286, radiusKm: 22 },
+  { name: "gliwice", latitude: 50.2945, longitude: 18.6714, radiusKm: 22 },
+  { name: "olsztyn", latitude: 53.7784, longitude: 20.4801, radiusKm: 22 },
+  { name: "bielsko biala", latitude: 49.8224, longitude: 19.0584, radiusKm: 22 },
+  { name: "zabrze", latitude: 50.3249, longitude: 18.7857, radiusKm: 20 },
+  { name: "bytom", latitude: 50.348, longitude: 18.9328, radiusKm: 20 },
+  { name: "zielona gora", latitude: 51.9355, longitude: 15.5062, radiusKm: 22 },
+  { name: "rybnik", latitude: 50.1022, longitude: 18.5463, radiusKm: 20 },
+  { name: "ruda slaska", latitude: 50.2558, longitude: 18.8556, radiusKm: 18 },
+  { name: "tychy", latitude: 50.1218, longitude: 19.0201, radiusKm: 18 },
+  { name: "opole", latitude: 50.6751, longitude: 17.9213, radiusKm: 22 },
+  { name: "elblag", latitude: 54.1561, longitude: 19.4045, radiusKm: 20 },
+  { name: "plock", latitude: 52.5463, longitude: 19.7065, radiusKm: 20 },
+  { name: "gorzow wielkopolski", latitude: 52.7325, longitude: 15.2369, radiusKm: 20 },
+  { name: "walbrzych", latitude: 50.784, longitude: 16.2844, radiusKm: 20 },
+  { name: "wloclawek", latitude: 52.6483, longitude: 19.0677, radiusKm: 20 },
+  { name: "tarnow", latitude: 50.0121, longitude: 20.9858, radiusKm: 20 },
+  { name: "chorzow", latitude: 50.2975, longitude: 18.9546, radiusKm: 18 },
+  { name: "koszalin", latitude: 54.1944, longitude: 16.1722, radiusKm: 20 },
+  { name: "kalisz", latitude: 51.7611, longitude: 18.091, radiusKm: 20 },
+  { name: "legnica", latitude: 51.207, longitude: 16.1553, radiusKm: 20 },
+  { name: "grudziadz", latitude: 53.4838, longitude: 18.7536, radiusKm: 20 },
+  { name: "slupsk", latitude: 54.4641, longitude: 17.0287, radiusKm: 20 },
+  { name: "jaworzno", latitude: 50.2053, longitude: 19.2748, radiusKm: 18 },
+  { name: "jastrzebie zdroj", latitude: 49.9506, longitude: 18.5742, radiusKm: 18 },
+  { name: "nowy sacz", latitude: 49.6218, longitude: 20.697, radiusKm: 20 },
+  { name: "jelenia gora", latitude: 50.9044, longitude: 15.7194, radiusKm: 20 },
+  { name: "siedlce", latitude: 52.1676, longitude: 22.2902, radiusKm: 20 },
+  { name: "myslowice", latitude: 50.2081, longitude: 19.1669, radiusKm: 18 },
+  { name: "konin", latitude: 52.223, longitude: 18.2511, radiusKm: 20 },
+  { name: "pila", latitude: 53.1515, longitude: 16.7382, radiusKm: 20 },
+  { name: "inowroclaw", latitude: 52.7989, longitude: 18.2639, radiusKm: 18 },
+  { name: "ostrowiec swietokrzyski", latitude: 50.9294, longitude: 21.3852, radiusKm: 18 },
+  { name: "suwalki", latitude: 54.1115, longitude: 22.9308, radiusKm: 18 }
 ];
 
 const firstOnboardingStep = onboarding[0]!;
@@ -530,15 +595,21 @@ function CalculatorScreen({
               {item.limit} - {formatMoney(item.deposit)}
             </Text>
             <View style={styles.counterRow}>
-              <IconButton icon="remove-outline" onPress={() => onSetCount(item.id, counts[item.id] - 1)} />
+              <IconButton emoji="−" onPress={() => onSetCount(item.id, counts[item.id] - 1)} />
               <View style={styles.counterValueBox}>
                 <Text style={styles.counterValue}>{counts[item.id]}</Text>
               </View>
               <Pressable style={styles.plusButton} onPress={() => onSetCount(item.id, counts[item.id] + 1)}>
-                <Ionicons name="add-outline" size={23} color="#FFFFFF" />
+                <Text style={styles.plusButtonText}>+</Text>
               </Pressable>
             </View>
             <View style={styles.sliderShell}>
+              <View
+                style={[
+                  styles.sliderVisualFill,
+                  { width: `${Math.min(100, (counts[item.id] / 200) * 100)}%`, backgroundColor: item.color }
+                ]}
+              />
               <Slider
                 style={styles.slider}
                 minimumValue={0}
@@ -593,6 +664,7 @@ function CalculatorScreen({
 function MapScreen({ region, onLocate }: { region: Region; onLocate: () => Promise<void> }) {
   const [query, setQuery] = useState("");
   const [visibleRegion, setVisibleRegion] = useState(region);
+  const [reportVisible, setReportVisible] = useState(false);
 
   useEffect(() => {
     setVisibleRegion(region);
@@ -602,17 +674,23 @@ function MapScreen({ region, onLocate }: { region: Region; onLocate: () => Promi
     void onLocate();
   }, []);
 
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = normalizeText(query.trim());
+  const cityMatch = citySearchCenters.find((city) => normalizedQuery.includes(city.name));
   const visiblePoints = useMemo(
-    () =>
-      normalizedQuery
-        ? RETURN_POINTS.filter((point) =>
-            [point.name, point.chain, point.city, point.address, point.description]
-              .filter(Boolean)
-              .some((value) => value!.toLowerCase().includes(normalizedQuery))
-          )
-        : RETURN_POINTS,
-    [normalizedQuery]
+    () => {
+      if (!normalizedQuery) return RETURN_POINTS;
+
+      const textMatches = RETURN_POINTS.filter((point) =>
+        [point.name, point.chain, point.city, point.address, point.description]
+          .filter(Boolean)
+          .some((value) => normalizeText(value!).includes(normalizedQuery))
+      );
+
+      if (textMatches.length > 0 || !cityMatch) return textMatches;
+
+      return RETURN_POINTS.filter((point) => distanceInKm(cityMatch, point) <= cityMatch.radiusKm);
+    },
+    [cityMatch, normalizedQuery]
   );
   const rankedPoints = useMemo(
     () =>
@@ -628,6 +706,7 @@ function MapScreen({ region, onLocate }: { region: Region; onLocate: () => Promi
     () => rankedPoints.slice(0, normalizedQuery ? 600 : 350),
     [normalizedQuery, rankedPoints]
   );
+  const reportPointOptions = nearestPoints.slice(0, 5);
 
   return (
     <View style={styles.mapScreen}>
@@ -672,6 +751,10 @@ function MapScreen({ region, onLocate }: { region: Region; onLocate: () => Promi
             <Text style={styles.statusPillText}>{visiblePoints.length} punktów</Text>
           </View>
         </View>
+        <Pressable style={styles.reportButton} onPress={() => setReportVisible(true)}>
+          <Text style={styles.reportButtonEmoji}>🛠️</Text>
+          <Text style={styles.reportButtonText}>Zgłoś awarię butelkomatu</Text>
+        </Pressable>
         {nearestPoints.length === 0 ? (
           <View style={styles.noPointsBox}>
             <Text style={styles.noPointsEmoji}>🔎</Text>
@@ -696,7 +779,131 @@ function MapScreen({ region, onLocate }: { region: Region; onLocate: () => Promi
           ))
         )}
       </View>
+      <FailureReportModal
+        visible={reportVisible}
+        points={reportPointOptions}
+        fallbackLocation={`Mapa: ${visibleRegion.latitude.toFixed(5)}, ${visibleRegion.longitude.toFixed(5)}`}
+        onClose={() => setReportVisible(false)}
+      />
     </View>
+  );
+}
+
+function FailureReportModal({
+  visible,
+  points,
+  fallbackLocation,
+  onClose
+}: {
+  visible: boolean;
+  points: Array<{ name: string; address: string; distance: number }>;
+  fallbackLocation: string;
+  onClose: () => void;
+}) {
+  const now = new Date();
+  const [location, setLocation] = useState("");
+  const [date, setDate] = useState(
+    new Intl.DateTimeFormat("pl-PL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    }).format(now)
+  );
+  const [time, setTime] = useState(
+    new Intl.DateTimeFormat("pl-PL", {
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(now)
+  );
+  const [reason, setReason] = useState("Automat nie przyjmuje opakowań");
+
+  useEffect(() => {
+    if (visible) setLocation(points[0] ? `${points[0].name}, ${points[0].address}` : fallbackLocation);
+  }, [fallbackLocation, points, visible]);
+
+  const submitReport = async () => {
+    const report: FailureReport = {
+      id: `${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      location,
+      reportDate: date,
+      reportTime: time,
+      reason
+    };
+
+    await saveFailureReport(report);
+    onClose();
+    Alert.alert("Dziękujemy", "Zgłoszenie zostało zapisane. Dzięki za pomoc w aktualizacji punktów.");
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+      <SafeAreaView style={styles.modalSafe}>
+        <ScrollView contentContainerStyle={styles.reportModal}>
+          <Text style={styles.reportHeroEmoji}>🛠️</Text>
+          <Text style={styles.onboardingTitle}>Zgłoś awarię</Text>
+          <Text style={styles.onboardingText}>Wybierz punkt, termin i powód. Zgłoszenie zapisze się lokalnie w aplikacji.</Text>
+
+          <Text style={styles.reportSectionLabel}>Lokalizacja</Text>
+          {points.length === 0 ? (
+            <Pressable style={[styles.choiceChip, styles.choiceChipActive]} onPress={() => setLocation(fallbackLocation)}>
+              <Text style={styles.choiceChipText}>{fallbackLocation}</Text>
+            </Pressable>
+          ) : (
+            points.map((point) => {
+              const value = `${point.name}, ${point.address}`;
+              const active = location === value;
+              return (
+                <Pressable
+                  key={value}
+                  style={[styles.choiceChip, active && styles.choiceChipActive]}
+                  onPress={() => setLocation(value)}
+                >
+                  <Text style={styles.choiceChipEmoji}>📍</Text>
+                  <View style={styles.choiceChipBody}>
+                    <Text style={styles.choiceChipTitle}>{point.name}</Text>
+                    <Text style={styles.choiceChipText}>{formatDistance(point.distance)} · {point.address}</Text>
+                  </View>
+                </Pressable>
+              );
+            })
+          )}
+
+          <Text style={styles.reportSectionLabel}>Data i godzina</Text>
+          <View style={styles.reportDateRow}>
+            <TextInput value={date} onChangeText={setDate} style={styles.reportInput} />
+            <TextInput value={time} onChangeText={setTime} style={styles.reportInput} />
+          </View>
+
+          <Text style={styles.reportSectionLabel}>Powód</Text>
+          {[
+            "Automat nie przyjmuje opakowań",
+            "Automat jest pełny",
+            "Punkt jest zamknięty",
+            "Błędna lokalizacja na mapie",
+            "Inny problem"
+          ].map((item) => (
+            <Pressable
+              key={item}
+              style={[styles.choiceChip, reason === item && styles.choiceChipActive]}
+              onPress={() => setReason(item)}
+            >
+              <Text style={styles.choiceChipEmoji}>⚠️</Text>
+              <Text style={styles.choiceChipTitle}>{item}</Text>
+            </Pressable>
+          ))}
+
+          <View style={styles.onboardingActions}>
+            <Pressable style={styles.skipButton} onPress={onClose}>
+              <Text style={styles.skipText}>Anuluj</Text>
+            </Pressable>
+            <Pressable style={styles.primaryButton} onPress={submitReport}>
+              <Text style={styles.primaryText}>Wyślij</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
   );
 }
 
@@ -835,7 +1042,7 @@ function GoalsScreen({
             </Text>
           </View>
           <Pressable style={styles.addGoalButtonLarge} onPress={() => setModalVisible(true)}>
-            <Ionicons name="add-outline" size={22} color="#FFFFFF" />
+            <Text style={styles.addGoalEmoji}>＋</Text>
             <Text style={styles.addGoalText}>Nowy cel</Text>
           </Pressable>
         </LinearGradient>
@@ -848,7 +1055,7 @@ function GoalsScreen({
             </Text>
           </View>
           <Pressable style={styles.addGoalButton} onPress={() => setModalVisible(true)}>
-            <Ionicons name="add-outline" size={22} color="#FFFFFF" />
+            <Text style={styles.addGoalIconText}>＋</Text>
           </Pressable>
         </View>
         {goals.length === 0 ? (
@@ -988,11 +1195,11 @@ function GoalCard({
         <View style={styles.goalRight}>
           {!goal.primary && (
             <Pressable style={styles.primaryGoalButton} onPress={onSetPrimary}>
-              <Ionicons name="star-outline" size={18} color={GREEN} />
+              <Text style={styles.goalActionEmoji}>⭐</Text>
             </Pressable>
           )}
           <Pressable style={styles.deleteGoalButton} onPress={onDelete}>
-            <Ionicons name="trash-outline" size={18} color="#C24B4B" />
+            <Text style={styles.goalActionEmoji}>🗑️</Text>
           </Pressable>
           <View style={styles.goalIcon}>
             <Text style={styles.goalEmoji}>{goal.emoji}</Text>
@@ -1018,7 +1225,7 @@ function BottomTabs({ activeTab, onChange }: { activeTab: Tab; onChange: (tab: T
         return (
           <Pressable key={tab.id} style={[styles.tabButton, active && styles.tabButtonActive]} onPress={() => onChange(tab.id)}>
             <View style={[styles.tabIconWrap, active && styles.tabIconWrapActive]}>
-              <Ionicons name={tab.icon} size={active ? 24 : 21} color={active ? "#FFFFFF" : "#7D8A93"} />
+              <Text style={styles.tabEmoji}>{tab.emoji}</Text>
             </View>
             <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
           </Pressable>
@@ -1046,7 +1253,7 @@ function OnboardingModal({
       <SafeAreaView style={styles.modalSafe}>
         <LinearGradient colors={["#F9FCFA", "#EAF6EF"]} style={styles.onboardingBody}>
           <View style={styles.onboardingIcon}>
-            <Ionicons name={step.icon} size={42} color="#FFFFFF" />
+            <Text style={styles.onboardingEmoji}>{step.emoji}</Text>
           </View>
           <Text style={styles.onboardingTitle}>{step.title}</Text>
           <Text style={styles.onboardingText}>{step.body}</Text>
@@ -1072,15 +1279,15 @@ function OnboardingModal({
 }
 
 function IconButton({
-  icon,
+  emoji,
   onPress
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  emoji: string;
   onPress: () => void;
 }) {
   return (
     <Pressable style={styles.iconButton} onPress={onPress}>
-      <Ionicons name={icon} size={20} color={GREEN} />
+      <Text style={styles.iconButtonEmoji}>{emoji}</Text>
     </Pressable>
   );
 }
@@ -1486,6 +1693,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 2
   },
+  iconButtonEmoji: {
+    color: GREEN,
+    fontSize: 30,
+    fontWeight: "900",
+    lineHeight: 34
+  },
   plusButton: {
     width: 46,
     height: 46,
@@ -1498,6 +1711,12 @@ const styles = StyleSheet.create({
     shadowRadius: 7,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3
+  },
+  plusButtonText: {
+    color: "#FFFFFF",
+    fontSize: 30,
+    fontWeight: "900",
+    lineHeight: 34
   },
   counterValueBox: {
     flex: 1,
@@ -1516,15 +1735,24 @@ const styles = StyleSheet.create({
   },
   sliderShell: {
     marginTop: 8,
-    minHeight: 34,
+    minHeight: 46,
     borderRadius: 8,
     backgroundColor: "#F2F7F5",
     justifyContent: "center",
-    paddingHorizontal: 2
+    paddingHorizontal: 2,
+    overflow: "hidden"
+  },
+  sliderVisualFill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    opacity: 0.12,
+    borderRadius: 8
   },
   slider: {
     width: "100%",
-    height: 34
+    height: 46
   },
   quickAmountRow: {
     flexDirection: "row",
@@ -1718,6 +1946,26 @@ const styles = StyleSheet.create({
   statusPillText: {
     color: GREEN,
     fontSize: 11,
+    fontWeight: "900"
+  },
+  reportButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    backgroundColor: "#F4F8F6",
+    borderWidth: 1,
+    borderColor: "#D3E5DD",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    marginTop: 12
+  },
+  reportButtonEmoji: {
+    fontSize: 20
+  },
+  reportButtonText: {
+    color: NAVY,
+    fontSize: 14,
     fontWeight: "900"
   },
   noPointsBox: {
@@ -1942,6 +2190,17 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14
   },
+  addGoalEmoji: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "900"
+  },
+  addGoalIconText: {
+    color: "#FFFFFF",
+    fontSize: 25,
+    fontWeight: "900",
+    lineHeight: 29
+  },
   addGoalText: {
     color: "#FFFFFF",
     fontWeight: "900",
@@ -2004,6 +2263,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#EFF8F3",
     alignItems: "center",
     justifyContent: "center"
+  },
+  goalActionEmoji: {
+    fontSize: 16
   },
   deleteGoalButton: {
     width: 34,
@@ -2185,11 +2447,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#F0F8F4"
   },
   tabIconWrap: {
-    width: 36,
-    height: 30,
+    width: 42,
+    height: 34,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center"
+  },
+  tabEmoji: {
+    fontSize: 22
   },
   tabIconWrapActive: {
     backgroundColor: GREEN,
@@ -2225,6 +2490,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 24
+  },
+  onboardingEmoji: {
+    fontSize: 46
   },
   onboardingTitle: {
     color: NAVY,
@@ -2270,5 +2538,70 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontWeight: "900",
     fontSize: 16
+  },
+  reportModal: {
+    padding: 20,
+    paddingBottom: 28,
+    gap: 12
+  },
+  reportHeroEmoji: {
+    fontSize: 58,
+    textAlign: "center"
+  },
+  reportSectionLabel: {
+    color: NAVY,
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 8
+  },
+  choiceChip: {
+    minHeight: 50,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: LINE,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  choiceChipActive: {
+    borderColor: GREEN,
+    backgroundColor: "#EAF8EF"
+  },
+  choiceChipEmoji: {
+    fontSize: 18
+  },
+  choiceChipBody: {
+    flex: 1
+  },
+  choiceChipTitle: {
+    color: NAVY,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  choiceChipText: {
+    flex: 1,
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  reportDateRow: {
+    flexDirection: "row",
+    gap: 10
+  },
+  reportInput: {
+    minHeight: 50,
+    flex: 1,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: LINE,
+    color: NAVY,
+    fontSize: 16,
+    fontWeight: "800",
+    paddingHorizontal: 12,
+    textAlign: "center"
   }
 });
