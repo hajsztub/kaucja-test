@@ -614,15 +614,19 @@ function MapScreen({ region, onLocate }: { region: Region; onLocate: () => Promi
         : RETURN_POINTS,
     [normalizedQuery]
   );
-  const nearestPoints = useMemo(
+  const rankedPoints = useMemo(
     () =>
       visiblePoints.map((point) => ({
         ...point,
         distance: distanceInKm(visibleRegion, point)
       }))
-        .sort((first, second) => first.distance - second.distance)
-        .slice(0, 8),
+        .sort((first, second) => first.distance - second.distance),
     [visiblePoints, visibleRegion]
+  );
+  const nearestPoints = useMemo(() => rankedPoints.slice(0, 8), [rankedPoints]);
+  const markerPoints = useMemo(
+    () => rankedPoints.slice(0, normalizedQuery ? 600 : 350),
+    [normalizedQuery, rankedPoints]
   );
 
   return (
@@ -648,7 +652,7 @@ function MapScreen({ region, onLocate }: { region: Region; onLocate: () => Promi
         onRegionChangeComplete={setVisibleRegion}
         showsUserLocation
       >
-        {visiblePoints.map((point) => (
+        {markerPoints.map((point) => (
           <Marker
             key={point.id}
             coordinate={{ latitude: point.latitude, longitude: point.longitude }}
