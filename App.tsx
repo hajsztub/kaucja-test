@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -65,6 +66,7 @@ const adRequestOptions = {
 };
 
 const interstitial = InterstitialAd.createForAdRequest(INTERSTITIAL_AD_UNIT_ID, adRequestOptions);
+const appIcon = require("./assets/icon.png");
 
 const tabs: Array<{ id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "home", label: "Start", icon: "home-outline" },
@@ -258,7 +260,9 @@ export default function App() {
       },
       ...history
     ];
-    const goalIndex = goals.findIndex((goal) => goal.current < goal.target);
+    const primaryGoalIndex = goals.findIndex((goal) => goal.primary && goal.current < goal.target);
+    const goalIndex =
+      primaryGoalIndex >= 0 ? primaryGoalIndex : goals.findIndex((goal) => goal.current < goal.target);
     const nextGoals =
       goalIndex >= 0
         ? goals.map((goal, index) =>
@@ -404,8 +408,7 @@ function HomeScreen({
     <ScrollView contentContainerStyle={styles.homeContent} showsVerticalScrollIndicator={false}>
       <View style={styles.homeHeader}>
         <View style={styles.logoMark}>
-          <Ionicons name="refresh-outline" size={35} color="#FFFFFF" />
-          <Ionicons name="water-outline" size={28} color="#FFFFFF" style={styles.logoBottle} />
+          <Image source={appIcon} style={styles.logoImage} />
         </View>
         <View style={styles.homeTitleWrap}>
           <Text style={styles.appTitle}>Kaucjomat</Text>
@@ -418,13 +421,17 @@ function HomeScreen({
 
       <LinearGradient colors={["#5DBE54", "#00846B"]} style={styles.refundCard}>
         <View>
-          <Text style={styles.refundLabel}>Szacowany zwrot</Text>
+          <Text style={styles.refundLabel}>W kalkulatorze teraz</Text>
           <Text style={styles.refundValue}>{formatMoney(amount)}</Text>
           <Text style={styles.refundNote}>
             {amount > 0 ? "To się opłaca i ma znaczenie!" : "Dodaj opakowania w kalkulatorze."}
           </Text>
         </View>
-        <Ionicons name="leaf-outline" size={70} color="rgba(255,255,255,0.22)" />
+        <View style={styles.refundSide}>
+          <Text style={styles.refundSideEmoji}>♻️</Text>
+          <Text style={styles.refundSideLabel}>Historia</Text>
+          <Text style={styles.refundSideValue}>{formatMoney(totalSaved)}</Text>
+        </View>
       </LinearGradient>
 
       <View style={styles.quickGrid}>
@@ -441,7 +448,7 @@ function HomeScreen({
         </View>
         {PACKAGES.map((item) => (
           <View key={item.id} style={styles.rateRow}>
-            <BottleIcon kind={item.id} />
+            <PackageEmoji kind={item.id} />
             <Text style={styles.rateName}>
               {item.name} {item.limit}
             </Text>
@@ -452,7 +459,7 @@ function HomeScreen({
 
       <View style={styles.systemCard}>
         <View style={styles.systemIcon}>
-          <Ionicons name="calendar-outline" size={23} color={NAVY} />
+          <Text style={styles.systemFlag}>🇵🇱</Text>
         </View>
         <View style={styles.systemTextWrap}>
           <Text style={styles.systemTitle}>System kaucyjny w Polsce</Text>
@@ -512,10 +519,13 @@ function CalculatorScreen({
       {PACKAGES.map((item) => (
         <View key={item.id} style={styles.calcRow}>
           <View style={styles.productCircle}>
-            <BottleIcon kind={item.id} large />
+            <Text style={styles.productEmoji}>{item.emoji}</Text>
           </View>
           <View style={styles.calcBody}>
-            <Text style={styles.packageName}>{item.name}</Text>
+            <View style={styles.packageHeader}>
+              <Text style={styles.packageName}>{item.name}</Text>
+              <Text style={styles.packageCountBadge}>{counts[item.id]} szt.</Text>
+            </View>
             <Text style={styles.packageDescription}>
               {item.limit} - {formatMoney(item.deposit)}
             </Text>
@@ -528,16 +538,30 @@ function CalculatorScreen({
                 <Ionicons name="add-outline" size={23} color="#FFFFFF" />
               </Pressable>
             </View>
-            <Slider
-              minimumValue={0}
-              maximumValue={200}
-              step={1}
-              value={counts[item.id]}
-              minimumTrackTintColor={GREEN}
-              maximumTrackTintColor="#DCE8E3"
-              thumbTintColor={GREEN}
-              onValueChange={(value) => onSetCount(item.id, value)}
-            />
+            <View style={styles.sliderShell}>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={200}
+                step={1}
+                value={counts[item.id]}
+                minimumTrackTintColor={item.color}
+                maximumTrackTintColor="#DCE8E3"
+                thumbTintColor={item.color}
+                onValueChange={(value) => onSetCount(item.id, value)}
+              />
+            </View>
+            <View style={styles.quickAmountRow}>
+              {[5, 10, 25].map((step) => (
+                <Pressable
+                  key={step}
+                  style={styles.quickAmountButton}
+                  onPress={() => onSetCount(item.id, counts[item.id] + step)}
+                >
+                  <Text style={styles.quickAmountText}>+{step}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         </View>
       ))}
@@ -749,6 +773,7 @@ function GoalsScreen({
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
   const [emoji, setEmoji] = useState("🎯");
+  const primaryGoal = goals.find((goal) => goal.primary);
 
   const resetForm = () => {
     setName("");
@@ -770,7 +795,8 @@ function GoalsScreen({
         name: name.trim(),
         current: 0,
         target: parsedTarget,
-        emoji: emoji.trim() || "🎯"
+        emoji: emoji.trim() || "🎯",
+        primary: goals.length === 0
       },
       ...goals
     ]);
@@ -789,6 +815,10 @@ function GoalsScreen({
     ]);
   };
 
+  const setPrimaryGoal = (goal: Goal) => {
+    onChangeGoals(goals.map((item) => ({ ...item, primary: item.id === goal.id })));
+  };
+
   return (
     <>
       <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
@@ -796,7 +826,9 @@ function GoalsScreen({
           <View>
             <Text style={styles.goalHeroEmoji}>💚</Text>
             <Text style={styles.goalHeroTitle}>Zbieraj kaucję na coś fajnego</Text>
-            <Text style={styles.goalHeroText}>Każdy zwrot może zasilić rower, klasę, wyjazd albo małą nagrodę.</Text>
+            <Text style={styles.goalHeroText}>
+              Kwoty z kalkulatora trafiają do celu głównego{primaryGoal ? `: ${primaryGoal.name}.` : "."}
+            </Text>
           </View>
           <Pressable style={styles.addGoalButtonLarge} onPress={() => setModalVisible(true)}>
             <Ionicons name="add-outline" size={22} color="#FFFFFF" />
@@ -807,7 +839,9 @@ function GoalsScreen({
         <View style={styles.goalHeader}>
           <View>
             <Text style={styles.sectionTitle}>Zbiórki i cele</Text>
-            <Text style={styles.helperText}>{goals.length} aktywne cele</Text>
+            <Text style={styles.helperText}>
+              {goals.length === 1 ? "1 aktywny cel" : `${goals.length} aktywne cele`}
+            </Text>
           </View>
           <Pressable style={styles.addGoalButton} onPress={() => setModalVisible(true)}>
             <Ionicons name="add-outline" size={22} color="#FFFFFF" />
@@ -824,8 +858,9 @@ function GoalsScreen({
             <GoalCard
               key={goal.id}
               goal={goal}
-              highlighted={index === 0}
+              highlighted={Boolean(goal.primary)}
               onDelete={() => removeGoal(goal)}
+              onSetPrimary={() => setPrimaryGoal(goal)}
             />
           ))
         )}
@@ -922,11 +957,13 @@ function GuideScreen({ onReplayTutorial }: { onReplayTutorial: () => void }) {
 function GoalCard({
   goal,
   highlighted,
-  onDelete
+  onDelete,
+  onSetPrimary
 }: {
   goal: Goal;
   highlighted?: boolean;
   onDelete: () => void;
+  onSetPrimary: () => void;
 }) {
   const progress = Math.min(1, goal.current / goal.target);
 
@@ -934,10 +971,22 @@ function GoalCard({
     <View style={[styles.goalCard, highlighted && styles.goalCardHero]}>
       <View style={styles.goalTop}>
         <View>
-          <Text style={styles.goalName}>{goal.name}</Text>
+          <View style={styles.goalNameRow}>
+            <Text style={styles.goalName}>{goal.name}</Text>
+            {goal.primary && (
+              <View style={styles.primaryGoalPill}>
+                <Text style={styles.primaryGoalText}>Główny</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.goalAmount}>{formatMoney(goal.current)}</Text>
         </View>
         <View style={styles.goalRight}>
+          {!goal.primary && (
+            <Pressable style={styles.primaryGoalButton} onPress={onSetPrimary}>
+              <Ionicons name="star-outline" size={18} color={GREEN} />
+            </Pressable>
+          )}
           <Pressable style={styles.deleteGoalButton} onPress={onDelete}>
             <Ionicons name="trash-outline" size={18} color="#C24B4B" />
           </Pressable>
@@ -963,8 +1012,10 @@ function BottomTabs({ activeTab, onChange }: { activeTab: Tab; onChange: (tab: T
       {tabs.map((tab) => {
         const active = activeTab === tab.id;
         return (
-          <Pressable key={tab.id} style={styles.tabButton} onPress={() => onChange(tab.id)}>
-            <Ionicons name={tab.icon} size={22} color={active ? GREEN : "#7D8A93"} />
+          <Pressable key={tab.id} style={[styles.tabButton, active && styles.tabButtonActive]} onPress={() => onChange(tab.id)}>
+            <View style={[styles.tabIconWrap, active && styles.tabIconWrapActive]}>
+              <Ionicons name={tab.icon} size={active ? 24 : 21} color={active ? "#FFFFFF" : "#7D8A93"} />
+            </View>
             <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
           </Pressable>
         );
@@ -1037,6 +1088,15 @@ function BottleIcon({ kind, large }: { kind: PackageKind; large?: boolean }) {
   return <Ionicons name={icon} size={large ? 48 : 25} color={color} />;
 }
 
+function PackageEmoji({ kind }: { kind: PackageKind }) {
+  const item = PACKAGES.find((packageItem) => packageItem.id === kind);
+  return (
+    <View style={styles.packageEmojiBadge}>
+      <Text style={styles.packageEmojiText}>{item?.emoji ?? "♻️"}</Text>
+    </View>
+  );
+}
+
 function CheckLine({ text }: { text: string }) {
   return (
     <View style={styles.checkLine}>
@@ -1105,7 +1165,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 8,
-    backgroundColor: GREEN,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: GREEN,
@@ -1114,8 +1174,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 4
   },
-  logoBottle: {
-    position: "absolute"
+  logoImage: {
+    width: 76,
+    height: 76,
+    borderRadius: 8
   },
   homeTitleWrap: {
     flex: 1
@@ -1176,6 +1238,31 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     marginTop: 3
+  },
+  refundSide: {
+    minWidth: 106,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    alignItems: "center"
+  },
+  refundSideEmoji: {
+    fontSize: 27,
+    marginBottom: 2
+  },
+  refundSideLabel: {
+    color: "#DDF8EC",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  refundSideValue: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+    marginTop: 2
   },
   quickGrid: {
     flexDirection: "row",
@@ -1256,6 +1343,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900"
   },
+  packageEmojiBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#EFF7F4",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  packageEmojiText: {
+    fontSize: 20
+  },
   systemCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
@@ -1266,12 +1364,15 @@ const styles = StyleSheet.create({
     gap: 12
   },
   systemIcon: {
-    width: 42,
-    height: 42,
+    width: 58,
+    height: 58,
     borderRadius: 8,
     backgroundColor: "#E9F4F7",
     alignItems: "center",
     justifyContent: "center"
+  },
+  systemFlag: {
+    fontSize: 32
   },
   systemTextWrap: {
     flex: 1,
@@ -1303,15 +1404,19 @@ const styles = StyleSheet.create({
   },
   calcRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 13,
-    backgroundColor: "#FDFEFE"
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: LINE,
+    borderRadius: 8,
+    padding: 12
   },
   productCircle: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    backgroundColor: "#FFFFFF",
+    width: 76,
+    height: 76,
+    borderRadius: 8,
+    backgroundColor: "#F0F8F4",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -1322,13 +1427,33 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2
   },
+  productEmoji: {
+    fontSize: 40
+  },
   calcBody: {
     flex: 1
   },
+  packageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8
+  },
   packageName: {
+    flex: 1,
     color: NAVY,
     fontSize: 16,
     fontWeight: "900"
+  },
+  packageCountBadge: {
+    overflow: "hidden",
+    borderRadius: 8,
+    backgroundColor: MINT,
+    color: GREEN,
+    fontSize: 12,
+    fontWeight: "900",
+    paddingHorizontal: 8,
+    paddingVertical: 5
   },
   packageDescription: {
     color: NAVY,
@@ -1343,18 +1468,23 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   iconButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: 8,
-    backgroundColor: "#EEF7F2",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#CFE5DA",
+    borderColor: GREEN,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    shadowColor: "#0B2832",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2
   },
   plusButton: {
-    width: 38,
-    height: 38,
+    width: 46,
+    height: 46,
     borderRadius: 8,
     backgroundColor: GREEN,
     alignItems: "center",
@@ -1367,7 +1497,7 @@ const styles = StyleSheet.create({
   },
   counterValueBox: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 46,
     borderRadius: 8,
     backgroundColor: "#F5F7F7",
     borderWidth: 1,
@@ -1377,7 +1507,39 @@ const styles = StyleSheet.create({
   },
   counterValue: {
     color: NAVY,
-    fontSize: 22,
+    fontSize: 24,
+    fontWeight: "900"
+  },
+  sliderShell: {
+    marginTop: 8,
+    minHeight: 34,
+    borderRadius: 8,
+    backgroundColor: "#F2F7F5",
+    justifyContent: "center",
+    paddingHorizontal: 2
+  },
+  slider: {
+    width: "100%",
+    height: 34
+  },
+  quickAmountRow: {
+    flexDirection: "row",
+    gap: 7,
+    marginTop: 8
+  },
+  quickAmountButton: {
+    flex: 1,
+    minHeight: 32,
+    borderRadius: 8,
+    backgroundColor: "#F0F6F3",
+    borderWidth: 1,
+    borderColor: "#D3E5DD",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  quickAmountText: {
+    color: GREEN,
+    fontSize: 13,
     fontWeight: "900"
   },
   calcSummary: {
@@ -1814,6 +1976,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8
   },
+  goalNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap"
+  },
+  primaryGoalPill: {
+    borderRadius: 8,
+    backgroundColor: "#E5F6EA",
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  primaryGoalText: {
+    color: GREEN,
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  primaryGoalButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#EFF8F3",
+    alignItems: "center",
+    justifyContent: "center"
+  },
   deleteGoalButton: {
     width: 34,
     height: 34,
@@ -1967,23 +2154,50 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   tabs: {
-    minHeight: 70,
-    backgroundColor: "#FFFFFF",
+    minHeight: 82,
+    backgroundColor: "rgba(255,255,255,0.98)",
     borderTopWidth: 1,
     borderTopColor: LINE,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-around"
+    justifyContent: "space-around",
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    shadowColor: "#0B2832",
+    shadowOpacity: 0.09,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 12
   },
   tabButton: {
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 62,
-    gap: 4
+    minWidth: 66,
+    minHeight: 60,
+    borderRadius: 8,
+    gap: 5
+  },
+  tabButtonActive: {
+    backgroundColor: "#F0F8F4"
+  },
+  tabIconWrap: {
+    width: 36,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  tabIconWrapActive: {
+    backgroundColor: GREEN,
+    shadowColor: GREEN,
+    shadowOpacity: 0.24,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3
   },
   tabLabel: {
     color: "#7D8A93",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900"
   },
   tabLabelActive: {

@@ -8,6 +8,7 @@ export type DepositPackage = {
   deposit: number;
   limit: string;
   color: string;
+  emoji: string;
 };
 
 export type Counts = Record<PackageKind, number>;
@@ -26,6 +27,7 @@ export type Goal = {
   current: number;
   target: number;
   emoji: string;
+  primary?: boolean;
 };
 
 export const PACKAGES: DepositPackage[] = [
@@ -36,7 +38,8 @@ export const PACKAGES: DepositPackage[] = [
     description: "Plastikowe butelki ze znakiem kaucji",
     deposit: 0.5,
     limit: "do 3 l",
-    color: "#2F80ED"
+    color: "#2F80ED",
+    emoji: "🧴"
   },
   {
     id: "can",
@@ -45,7 +48,8 @@ export const PACKAGES: DepositPackage[] = [
     description: "Metalowe puszki ze znakiem kaucji",
     deposit: 0.5,
     limit: "do 1 l",
-    color: "#0F9D58"
+    color: "#0F9D58",
+    emoji: "🥫"
   },
   {
     id: "glass",
@@ -54,7 +58,8 @@ export const PACKAGES: DepositPackage[] = [
     description: "Szklane butelki wielokrotnego użytku",
     deposit: 1,
     limit: "do 1,5 l",
-    color: "#B65F28"
+    color: "#B65F28",
+    emoji: "🍾"
   }
 ];
 
@@ -65,7 +70,7 @@ export const INITIAL_COUNTS: Counts = {
 };
 
 export const DEFAULT_GOALS: Goal[] = [
-  { id: "bike", name: "Oszczędzam na rower", current: 68.5, target: 100, emoji: "🚲" },
+  { id: "bike", name: "Oszczędzam na rower", current: 68.5, target: 100, emoji: "🚲", primary: true },
   { id: "school", name: "Zbiórka szkolna", current: 132, target: 250, emoji: "🎒" },
   { id: "week", name: "Wyzwanie tygodnia", current: 18.5, target: 25, emoji: "🏆" },
   { id: "class", name: "Na zieloną klasę", current: 210, target: 500, emoji: "🌿" }

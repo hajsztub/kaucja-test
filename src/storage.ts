@@ -24,7 +24,10 @@ export const saveHistory = (history: ReturnEntry[]) =>
 
 export const loadGoals = async (): Promise<Goal[]> => {
   const raw = await AsyncStorage.getItem(GOALS_KEY);
-  return raw ? JSON.parse(raw) : DEFAULT_GOALS;
+  const goals: Goal[] = raw ? JSON.parse(raw) : DEFAULT_GOALS;
+  return goals.some((goal) => goal.primary)
+    ? goals
+    : goals.map((goal, index) => ({ ...goal, primary: index === 0 }));
 };
 
 export const saveGoals = (goals: Goal[]) =>
