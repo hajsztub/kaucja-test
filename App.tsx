@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import mobileAds, {
   AdEventType,
+  AdsConsent,
   BannerAd,
   BannerAdSize,
   InterstitialAd
@@ -59,9 +60,11 @@ const BANNER_AD_UNIT_ID = "ca-app-pub-1906928325769847/2619167313";
 const INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-1906928325769847/1306085646";
 const INTERSTITIAL_SCREEN_INTERVAL = 7;
 
-const interstitial = InterstitialAd.createForAdRequest(INTERSTITIAL_AD_UNIT_ID, {
+const adRequestOptions = {
   requestNonPersonalizedAdsOnly: false
-});
+};
+
+const interstitial = InterstitialAd.createForAdRequest(INTERSTITIAL_AD_UNIT_ID, adRequestOptions);
 
 const tabs: Array<{ id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: "home", label: "Start", icon: "home-outline" },
@@ -156,6 +159,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingIndex, setOnboardingIndex] = useState(0);
   const [region, setRegion] = useState<Region>(defaultRegion);
+  const [adsReady, setAdsReady] = useState(false);
   const [interstitialLoaded, setInterstitialLoaded] = useState(false);
   const screenChangeCountRef = useRef(0);
 
@@ -167,16 +171,17 @@ export default function App() {
   );
 
   useEffect(() => {
-    void mobileAds().initialize();
+    void initializeAds();
     void analytics().logScreenView({
       screen_name: "home",
       screen_class: screenTitles.home
     });
     void hydrate();
-    void locateUser();
   }, []);
 
   useEffect(() => {
+    if (!adsReady) return;
+
     const unsubscribeLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
       setInterstitialLoaded(true);
     });
@@ -195,7 +200,7 @@ export default function App() {
       unsubscribeClosed();
       unsubscribeError();
     };
-  }, []);
+  }, [adsReady]);
 
   useEffect(() => {
     void saveCounts(counts);
@@ -206,6 +211,17 @@ export default function App() {
     setHistory(await loadHistory());
     setGoals(await loadGoals());
     setShowOnboarding(!(await isOnboardingComplete()));
+  };
+
+  const initializeAds = async () => {
+    try {
+      await AdsConsent.gatherConsent();
+    } catch {
+      // Ads can still initialize; Google Mobile Ads will use the available consent state.
+    }
+
+    await mobileAds().initialize();
+    setAdsReady(true);
   };
 
   const locateUser = async () => {
@@ -242,11 +258,27 @@ export default function App() {
       },
       ...history
     ];
+    const goalIndex = goals.findIndex((goal) => goal.current < goal.target);
+    const nextGoals =
+      goalIndex >= 0
+        ? goals.map((goal, index) =>
+            index === goalIndex
+              ? { ...goal, current: Math.min(goal.target, goal.current + amount) }
+              : goal
+          )
+        : goals;
 
     setHistory(nextHistory);
+    setGoals(nextGoals);
     await saveHistory(nextHistory);
+    await saveGoals(nextGoals);
     clearCounts();
-    Alert.alert("Zapisano zwrot", `Do historii trafiło ${formatMoney(amount)}.`);
+    Alert.alert(
+      "Zapisano zwrot",
+      goalIndex >= 0
+        ? `Do historii trafiło ${formatMoney(amount)} i zasilono cel „${goals[goalIndex]?.name}”.`
+        : `Do historii trafiło ${formatMoney(amount)}.`
+    );
   };
 
   const finishOnboarding = async () => {
@@ -286,7 +318,6 @@ export default function App() {
             <TopBar
               title={screenTitles[activeTab]}
               onBack={() => navigate("home")}
-              actionIcon={activeTab === "map" ? "options-outline" : activeTab === "history" ? "calendar-outline" : undefined}
             />
           )}
           <View style={styles.content}>
@@ -307,12 +338,18 @@ export default function App() {
                 onClear={clearCounts}
               />
             )}
-            {activeTab === "map" && <MapScreen region={region} />}
+            {activeTab === "map" && <MapScreen region={region} onLocate={locateUser} />}
             {activeTab === "history" && <HistoryScreen history={history} totalSaved={totalSaved} />}
             {activeTab === "goals" && <GoalsScreen goals={goals} onChangeGoals={updateGoals} />}
             {activeTab === "guide" && <GuideScreen onReplayTutorial={() => setShowOnboarding(true)} />}
           </View>
-          <BannerAd unitId={BANNER_AD_UNIT_ID} size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER} />
+          {adsReady && (
+            <BannerAd
+              unitId={BANNER_AD_UNIT_ID}
+              size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+              requestOptions={adRequestOptions}
+            />
+          )}
           <BottomTabs activeTab={activeTab} onChange={navigate} />
         </View>
         <OnboardingModal
@@ -374,7 +411,9 @@ function HomeScreen({
           <Text style={styles.appTitle}>Kaucjomat</Text>
           <Text style={styles.appSubtitle}>Policz zwrot i znajdź najbliższy butelkomat</Text>
         </View>
-        <Ionicons name="notifications-outline" size={23} color={NAVY} />
+        <View style={styles.homeBadge}>
+          <Text style={styles.homeBadgeText}>{RETURN_POINTS.length} punktów</Text>
+        </View>
       </View>
 
       <LinearGradient colors={["#5DBE54", "#00846B"]} style={styles.refundCard}>
@@ -491,7 +530,7 @@ function CalculatorScreen({
             </View>
             <Slider
               minimumValue={0}
-              maximumValue={100}
+              maximumValue={200}
               step={1}
               value={counts[item.id]}
               minimumTrackTintColor={GREEN}
@@ -521,22 +560,45 @@ function CalculatorScreen({
         </Pressable>
       </View>
 
-      <AdPreview emoji="🪴" title="Ekologiczne rozwiązania dla Twojego domu" />
+      <TipPreview emoji="🪴" title="Zapisany zwrot automatycznie zasili pierwszy aktywny cel." />
       <Text style={styles.microCopy}>{totalCount} opakowań w aktualnym zwrocie</Text>
     </ScrollView>
   );
 }
 
-function MapScreen({ region }: { region: Region }) {
+function MapScreen({ region, onLocate }: { region: Region; onLocate: () => Promise<void> }) {
+  const [query, setQuery] = useState("");
+  const [visibleRegion, setVisibleRegion] = useState(region);
+
+  useEffect(() => {
+    setVisibleRegion(region);
+  }, [region]);
+
+  useEffect(() => {
+    void onLocate();
+  }, []);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visiblePoints = useMemo(
+    () =>
+      normalizedQuery
+        ? RETURN_POINTS.filter((point) =>
+            [point.name, point.chain, point.city, point.address, point.description]
+              .filter(Boolean)
+              .some((value) => value!.toLowerCase().includes(normalizedQuery))
+          )
+        : RETURN_POINTS,
+    [normalizedQuery]
+  );
   const nearestPoints = useMemo(
     () =>
-      RETURN_POINTS.map((point) => ({
+      visiblePoints.map((point) => ({
         ...point,
-        distance: distanceInKm(region, point)
+        distance: distanceInKm(visibleRegion, point)
       }))
         .sort((first, second) => first.distance - second.distance)
         .slice(0, 8),
-    [region]
+    [visiblePoints, visibleRegion]
   );
 
   return (
@@ -544,13 +606,25 @@ function MapScreen({ region }: { region: Region }) {
       <View style={styles.searchWrap}>
         <Ionicons name="search-outline" size={19} color={MUTED} />
         <TextInput
+          value={query}
+          onChangeText={setQuery}
           placeholder="Szukaj lokalizacji"
           placeholderTextColor="#7F8D95"
           style={styles.searchInput}
         />
+        {query.length > 0 && (
+          <Pressable onPress={() => setQuery("")}>
+            <Ionicons name="close-circle" size={19} color={MUTED} />
+          </Pressable>
+        )}
       </View>
-      <MapView style={styles.map} initialRegion={region} showsUserLocation>
-        {RETURN_POINTS.map((point) => (
+      <MapView
+        style={styles.map}
+        region={visibleRegion}
+        onRegionChangeComplete={setVisibleRegion}
+        showsUserLocation
+      >
+        {visiblePoints.map((point) => (
           <Marker
             key={point.id}
             coordinate={{ latitude: point.latitude, longitude: point.longitude }}
@@ -560,35 +634,48 @@ function MapScreen({ region }: { region: Region }) {
           />
         ))}
       </MapView>
+      <Pressable style={styles.locateButton} onPress={() => void onLocate()}>
+        <Ionicons name="navigate-outline" size={22} color={GREEN} />
+      </Pressable>
       <View style={styles.mapPanel}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Najbliższe punkty</Text>
           <View style={styles.statusPill}>
-            <Text style={styles.statusPillText}>{RETURN_POINTS.length} punktów</Text>
-            <Ionicons name="chevron-down-outline" size={12} color={GREEN} />
+            <Text style={styles.statusPillText}>{visiblePoints.length} punktów</Text>
           </View>
         </View>
-        {nearestPoints.map((point) => (
-          <View key={point.id} style={styles.pointRow}>
-            <Text style={styles.distance}>{formatDistance(point.distance)}</Text>
-            <View style={styles.pointText}>
-              <Text style={styles.pointName}>{point.chain ?? point.name}</Text>
-              <Text style={styles.pointAddress}>{point.address}</Text>
-              {point.description && <Text style={styles.pointDescription}>{point.description}</Text>}
-            </View>
-            <View style={styles.hoursBox}>
-              <Text style={styles.openText}>{point.type === "automat" ? "Butelkomat" : "Punkt"}</Text>
-              <Text style={styles.hoursText}>{point.hours ?? "8:00-22:00"}</Text>
-            </View>
-            <Ionicons name="chevron-forward-outline" size={17} color={MUTED} />
+        {nearestPoints.length === 0 ? (
+          <View style={styles.noPointsBox}>
+            <Text style={styles.noPointsEmoji}>🔎</Text>
+            <Text style={styles.noPointsTitle}>Nie znaleziono punktów</Text>
+            <Text style={styles.noPointsText}>Zmień frazę albo wyczyść wyszukiwanie.</Text>
           </View>
-        ))}
+        ) : (
+          nearestPoints.map((point) => (
+            <View key={point.id} style={styles.pointRow}>
+              <Text style={styles.distance}>{formatDistance(point.distance)}</Text>
+              <View style={styles.pointText}>
+                <Text style={styles.pointName}>{point.chain ?? point.name}</Text>
+                <Text style={styles.pointAddress}>{point.address}</Text>
+                {point.description && <Text style={styles.pointDescription}>{point.description}</Text>}
+              </View>
+              <View style={styles.hoursBox}>
+                <Text style={styles.openText}>{point.type === "automat" ? "Butelkomat" : "Punkt"}</Text>
+                <Text style={styles.hoursText}>{point.hours ?? "8:00-22:00"}</Text>
+              </View>
+              <Ionicons name="chevron-forward-outline" size={17} color={MUTED} />
+            </View>
+          ))
+        )}
       </View>
     </View>
   );
 }
 
 function HistoryScreen({ history, totalSaved }: { history: ReturnEntry[]; totalSaved: number }) {
+  const chartValues = useMemo(() => history.slice(0, 8).reverse().map((entry) => entry.amount), [history]);
+  const maxChartValue = Math.max(...chartValues, 1);
+
   if (history.length === 0) {
     return (
       <View style={styles.emptyState}>
@@ -601,22 +688,26 @@ function HistoryScreen({ history, totalSaved }: { history: ReturnEntry[]; totalS
 
   return (
     <View style={styles.historyScreen}>
-      <View style={styles.filterRow}>
-        <View style={styles.filterPill}>
-          <Text style={styles.filterText}>Ten miesiąc</Text>
-          <Ionicons name="chevron-down-outline" size={14} color={NAVY} />
+      <View style={styles.historySummaryRow}>
+        <View style={styles.historySummaryCard}>
+          <Text style={styles.historySummaryEmoji}>💸</Text>
+          <Text style={styles.historySummaryLabel}>Zwroty</Text>
+          <Text style={styles.historySummaryValue}>{history.length}</Text>
         </View>
-        <View style={styles.filterPill}>
-          <Text style={styles.filterText}>Tydzień</Text>
-          <Ionicons name="chevron-down-outline" size={14} color={NAVY} />
+        <View style={styles.historySummaryCard}>
+          <Text style={styles.historySummaryEmoji}>♻️</Text>
+          <Text style={styles.historySummaryLabel}>Opakowania</Text>
+          <Text style={styles.historySummaryValue}>
+            {history.reduce((sum, entry) => sum + countAll(entry.counts), 0)}
+          </Text>
         </View>
       </View>
       <Text style={styles.historyLabel}>Łącznie odzyskano</Text>
       <Text style={styles.historyTotal}>{formatMoney(totalSaved)}</Text>
       <View style={styles.chartCard}>
-        {[2, 5, 7, 4, 8, 5, 9, 3].map((height, index) => (
+        {chartValues.map((value, index) => (
           <View key={index} style={styles.chartColumnWrap}>
-            <View style={[styles.chartColumn, { height: height * 11 }]} />
+            <View style={[styles.chartColumn, { height: Math.max(10, (value / maxChartValue) * 92) }]} />
           </View>
         ))}
       </View>
@@ -633,13 +724,15 @@ function HistoryScreen({ history, totalSaved }: { history: ReturnEntry[]; totalS
               }).format(new Date(item.createdAt))}
             </Text>
             <View style={styles.historyMiddle}>
-              <Text style={styles.historyPlace}>Zwrot w punkcie</Text>
-              <Text style={styles.historyAddress}>ul. Zielona 15</Text>
+              <Text style={styles.historyPlace}>Zapisany zwrot</Text>
+              <Text style={styles.historyAddress}>
+                {countAll(item.counts)} opak. · PET {item.counts.pet}, puszki {item.counts.can}, szkło {item.counts.glass}
+              </Text>
             </View>
             <Text style={styles.historyAmount}>+{formatMoney(item.amount)}</Text>
           </View>
         )}
-        ListFooterComponent={<AdPreview emoji="🌍" title="Zadbaj o planetę każdego dnia" />}
+        ListFooterComponent={<TipPreview emoji="🌍" title="Małe zwroty robią dużą różnicę w skali miesiąca." />}
       />
     </View>
   );
@@ -736,7 +829,7 @@ function GoalsScreen({
             />
           ))
         )}
-        <AdPreview emoji="☀️" title="Energia ze słońca dla Twojego domu" />
+        <TipPreview emoji="☀️" title="Ustaw cel i obserwuj, jak rośnie po każdym zapisanym zwrocie." />
       </ScrollView>
 
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
@@ -953,12 +1046,12 @@ function CheckLine({ text }: { text: string }) {
   );
 }
 
-function AdPreview({ emoji, title }: { emoji: string; title: string }) {
+function TipPreview({ emoji, title }: { emoji: string; title: string }) {
   return (
     <View style={styles.adPreview}>
       <Text style={styles.adEmoji}>{emoji}</Text>
-      <View>
-        <Text style={styles.adLabel}>Reklama</Text>
+      <View style={styles.adTextWrap}>
+        <Text style={styles.adLabel}>Wskazówka</Text>
         <Text style={styles.adTitle}>{title}</Text>
       </View>
       <Ionicons name="chevron-forward-outline" size={24} color={NAVY} />
@@ -1026,6 +1119,23 @@ const styles = StyleSheet.create({
   },
   homeTitleWrap: {
     flex: 1
+  },
+  homeBadge: {
+    maxWidth: 88,
+    borderRadius: 8,
+    backgroundColor: MINT,
+    borderWidth: 1,
+    borderColor: "#CDE8D8",
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    alignItems: "center"
+  },
+  homeBadgeText: {
+    color: GREEN,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    textAlign: "center"
   },
   appTitle: {
     color: NAVY,
@@ -1359,6 +1469,9 @@ const styles = StyleSheet.create({
   adEmoji: {
     fontSize: 30
   },
+  adTextWrap: {
+    flex: 1
+  },
   adLabel: {
     color: MUTED,
     fontSize: 10,
@@ -1399,6 +1512,24 @@ const styles = StyleSheet.create({
   map: {
     flex: 1
   },
+  locateButton: {
+    position: "absolute",
+    right: 16,
+    top: 64,
+    width: 46,
+    height: 46,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: LINE,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0B2832",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4
+  },
   mapPanel: {
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
@@ -1422,6 +1553,23 @@ const styles = StyleSheet.create({
     color: GREEN,
     fontSize: 11,
     fontWeight: "900"
+  },
+  noPointsBox: {
+    alignItems: "center",
+    paddingVertical: 18,
+    gap: 4
+  },
+  noPointsEmoji: {
+    fontSize: 28
+  },
+  noPointsTitle: {
+    color: NAVY,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  noPointsText: {
+    color: MUTED,
+    fontSize: 12
   },
   pointRow: {
     flexDirection: "row",
@@ -1469,28 +1617,36 @@ const styles = StyleSheet.create({
   },
   historyScreen: {
     flex: 1,
-    paddingHorizontal: 18
+    paddingHorizontal: 18,
+    paddingTop: 6
   },
-  filterRow: {
+  historySummaryRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8
+    gap: 10,
+    marginBottom: 12
   },
-  filterPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
+  historySummaryCard: {
+    flex: 1,
     borderRadius: 8,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: LINE,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#FFFFFF"
+    padding: 12
   },
-  filterText: {
-    color: NAVY,
-    fontSize: 13,
+  historySummaryEmoji: {
+    fontSize: 22,
+    marginBottom: 6
+  },
+  historySummaryLabel: {
+    color: MUTED,
+    fontSize: 12,
     fontWeight: "800"
+  },
+  historySummaryValue: {
+    color: NAVY,
+    fontSize: 22,
+    fontWeight: "900",
+    marginTop: 2
   },
   historyLabel: {
     color: NAVY,
