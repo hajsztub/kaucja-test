@@ -1,0 +1,35 @@
+{
+  "name": "kaucja-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "~14.0.4",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-native-community/slider": "4.5.5",
+    "@react-native-firebase/analytics": "^24.0.0",
+    "@react-native-firebase/app": "^24.0.0",
+    "expo": "~52.0.0",
+    "expo-asset": "~11.0.5",
+    "expo-linear-gradient": "~14.0.2",
+    "expo-location": "~18.0.3",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-google-mobile-ads": "^14.8.0",
+    "react-native-maps": "1.18.0",
+    "react-native-safe-area-context": "4.12.0"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.12",
+    "eas-cli": "^19.1.0",
+    "typescript": "^5.3.3"
+  }
+}

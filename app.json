@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Kaucjomat",
+    "slug": "kaucjomat",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#F7FAF8"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.apphill.kaucja",
+      "config": {
+        "googleMapsApiKey": "REPLACE_WITH_IOS_GOOGLE_MAPS_KEY"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Kaucja używa lokalizacji, aby pokazać najbliższe punkty zwrotu opakowań."
+      }
+    },
+    "android": {
+      "package": "com.apphill.kaucja",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#087A55"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBz493q0ZZUWt5tQAimcgupJDk5kfwOe44"
+        }
+      },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-1906928325769847~7025316180",
+          "iosAppId": "ca-app-pub-1906928325769847~7025316180"
+        }
+      ]
+    ]
+  }
+}

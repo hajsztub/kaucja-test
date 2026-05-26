@@ -1,0 +1,32 @@
+[
+  {
+    "id": "warszawa-arkadia",
+    "name": "Centrum Handlowe Arkadia",
+    "address": "al. Jana Pawla II 82, Warszawa",
+    "type": "automat",
+    "status": "active",
+    "latitude": 52.2569,
+    "longitude": 20.9847,
+    "hours": "8:00-22:00"
+  },
+  {
+    "id": "krakow-bonarka",
+    "name": "Bonarka City Center",
+    "address": "Kaminskiego 11, Krakow",
+    "type": "automat",
+    "status": "unknown",
+    "latitude": 50.0294,
+    "longitude": 19.9503,
+    "hours": "7:00-23:00"
+  },
+  {
+    "id": "poznan-avenida",
+    "name": "Avenida Poznan",
+    "address": "Matyi 2, Poznan",
+    "type": "sklep",
+    "status": "manual",
+    "latitude": 52.4015,
+    "longitude": 16.9132,
+    "hours": "8:00-21:00"
+  }
+]

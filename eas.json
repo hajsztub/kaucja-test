@@ -1,0 +1,17 @@
+{
+  "cli": {
+    "version": ">= 12.0.0"
+  },
+  "build": {
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}
